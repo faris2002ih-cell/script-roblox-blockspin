@@ -1,32 +1,27 @@
 -- ================================================
---         Custom Blox Spin Farm & Protection
+--    Blox Spin Fixed & Optimized Script
 -- ================================================
 
-getgenv().script_mode = "FARM" -- الوضع الحالي (FARM أو PVP)
-
--- قائمة الأسماك التي تريد سكبها (عدم صيدها)
-getgenv().IgnoredFish = {
-    ["Mythic"] = true,    -- سكب سمك الميثك
-    ["Exotic"] = true,    -- سكب الإكزوتيك
-}
+getgenv().script_mode = getgenv().script_mode or "FARM"
+getgenv().IgnoredFish = getgenv().IgnoredFish or {["Mythic"] = true}
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 
 local Settings = {
-    UndergroundDepth = -50, -- العمق تحت الأرض
-    KickOnDamage = true    -- طرد تلقائي عند تلقي دمج
+    UndergroundDepth = -50,
+    KickOnDamage = true
 }
 
--- 1. نظام الطرد والتأمين عند التعرض لدمج
+-- 1. نظام الحماية (Kick عند الدمج)
 local function initAntiDamage()
     local function monitor(char)
         local hum = char:WaitForChild("Humanoid", 10)
         if hum then
             hum.HealthChanged:Connect(function(health)
                 if Settings.KickOnDamage and health < hum.MaxHealth then
-                    LocalPlayer:Kick("[Protection System] تم طردك تلقائياً للحفاظ على مواردك بسبب التعرض لدمج!")
+                    LocalPlayer:Kick("[Protection] تم طردك للحفاظ على مواردك بسبب دمج اللاعبين!")
                 end
             end)
         end
@@ -35,28 +30,31 @@ local function initAntiDamage()
     LocalPlayer.CharacterAdded:Connect(monitor)
 end
 
--- 2. تشغيل التثبيت تحت الأرض + الصيد داخل السيارة
+-- 2. تشغيل وضع التفريم
 if getgenv().script_mode == "FARM" then
-    print("[Blox Spin] FARM Mode Activated.")
+    print("[Blox Spin] FARM Mode Running...")
     initAntiDamage()
 
-    -- المحافظة على موقع السيارة/اللاعب تحت الأرض وتمرير الاصطدام (Noclip)
+    -- التثبيت تحت الأرض للسيارة واللاعب بشكل آمن
     RunService.Stepped:Connect(function()
         local char = LocalPlayer.Character
-        if char then
+        if char and char:FindFirstChild("HumanoidRootPart") then
             local hum = char:FindFirstChildOfClass("Humanoid")
-            local targetPart = char:FindFirstChild("HumanoidRootPart")
+            local targetPart = char.HumanoidRootPart
 
-            -- التأكد مما إذا كان يركب سيارة وتثبيت السيارة بالكامل تحت الأرض
+            -- التحقق الآمن من ركوب السيارة
             if hum and hum.SeatPart then
-                targetPart = hum.SeatPart.Parent:FindFirstChild("PrimaryPart") or hum.SeatPart
+                local vehicle = hum.SeatPart.Parent
+                if vehicle and vehicle:IsA("Model") then
+                    targetPart = vehicle.PrimaryPart or vehicle:FindFirstChildWhichIsA("BasePart") or targetPart
+                end
             end
 
             if targetPart and targetPart.Position.Y > Settings.UndergroundDepth then
                 targetPart.CFrame = CFrame.new(targetPart.Position.X, Settings.UndergroundDepth, targetPart.Position.Z)
             end
 
-            -- تفعيل Noclip للمركبة واللاعب
+            -- إيقاف الاصطدام (Noclip) لتجنب التعليق
             for _, v in pairs(char:GetDescendants()) do
                 if v:IsA("BasePart") then
                     v.CanCollide = false
@@ -65,17 +63,20 @@ if getgenv().script_mode == "FARM" then
         end
     end)
 
-    -- سكب الأسماك المحددة (Mythic وغيرها)
+    -- فلترة الأسماك الآمنة
     workspace.ChildAdded:Connect(function(child)
-        local fishName = child.Name
-        local isMythic = child:FindFirstChild("Rarity") and child.Rarity.Value == "Mythic"
-        
-        if getgenv().IgnoredFish[fishName] or isMythic then
-            print("[Fish Filter] Skipped: " .. fishName)
-            child:Destroy()
-        end
+        pcall(function()
+            local fishName = child.Name
+            local rarityObj = child:FindFirstChild("Rarity")
+            local rarityValue = rarityObj and (rarityObj.Value or rarityObj.Text) or ""
+            
+            if getgenv().IgnoredFish[fishName] or getgenv().IgnoredFish[rarityValue] then
+                print("[Filter] Skipped: " .. fishName)
+                child:Destroy()
+            end
+        end)
     end)
 
 elseif getgenv().script_mode == "PVP" then
-    print("[Blox Spin] PVP Mode Activated.")
+    print("[Blox Spin] PVP Mode Active.")
 end
